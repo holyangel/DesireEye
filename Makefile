@@ -247,7 +247,7 @@ CONFIG_SHELL := $(shell if [ -x "$$BASH" ]; then echo $$BASH; \
 
 HOSTCC       = gcc
 HOSTCXX      = g++
-HOSTCFLAGS   = -Wall -Wmissing-prototypes -Wstrict-prototypes -Ofast -fomit-frame-pointer -fgcse-las 
+HOSTCFLAGS   = -Wall -Wmissing-prototypes -Wstrict-prototypes -O3 -fomit-frame-pointer -fgcse-las 
 HOSTCXXFLAGS = -O3 -fgcse-las
 
 # Decide whether to build built-in, modular, or both.
@@ -358,8 +358,8 @@ MODFLAGS        = -DMODULE \
                   -mfpu=neon-vfpv4 \
                   -mtune=cortex-a15 \
 		  -fgcse-las \
-		  -fpredictive-commoning -floop-nest-optimize -fgcse-lm -fgcse-sm -fivopts \
-                  -O3
+		  -fpredictive-commoning \
+                  -O3 -floop-nest-optimize -fgcse-lm -fgcse-sm -fivopts
 CFLAGS_MODULE   = $(MODFLAGS)
 AFLAGS_MODULE   = $(MODFLAGS)
 LDFLAGS_MODULE  = -T $(srctree)/scripts/module-common.lds
@@ -371,14 +371,9 @@ CFLAGS_KERNEL	= -mfpu=neon-vfpv4 \
 		  -fgcse-lm \
 		  -fgcse-sm \
 		  -fsched-spec-load -fivopts \
-		  -DNDEBUG -pipe -mcpu=cortex-a15 -marm -ftree-vectorize -mvectorize-with-neon-quad \
-		  -floop-nest-optimize -Wno-maybe-uninitialized -fsingle-precision-constant \
-		  -fforce-addr -funroll-loops -floop-interchange -floop-strip-mine \
-		  -floop-block -fgcse-las
+		  -mcpu=cortex-a15 -ftree-vectorize -mvectorize-with-neon-quad \
+		  -floop-nest-optimize -Wno-maybe-uninitialized -fsingle-precision-constant 
 
-ifeq ($(ENABLE_GRAPHITE),true)
-CFLAGS_KERNEL	+= -O3 -floop-nest-optimize -munaligned-access -Wall -Wno-maybe-uninitialized -fgcse-lm -fgcse-sm -fsingle-precision-constant -fforce-addr -fsched-spec-load -mtune=cortex-a15 -mcpu=cortex-a15 -marm -mfpu=neon-vfpv4 -ftree-vectorize -mvectorize-with-neon-quad -funroll-loops -fpredictive-commoning -ffast-math -fgraphite -floop-parallelize-all -ftree-loop-linear -floop-interchange -floop-strip-mine -floop-block -fomit-frame-pointer -fgcse-las -Wmissing-prototypes -Wstrict-prototypes
-endif
 AFLAGS_KERNEL	=
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
@@ -392,11 +387,11 @@ LINUXINCLUDE    := -I$(srctree)/arch/$(hdr-arch)/include \
 
 KBUILD_CPPFLAGS := -D__KERNEL__
 
-CFLAGS_A15 = -mtune=cortex-a15 -mfpu=neon -floop-nest-optimize
+CFLAGS_A15 = -mtune=cortex-a15 -mfpu=neon -O3 -floop-nest-optimize
 CFLAGS_MODULO = -fmodulo-sched -fmodulo-sched-allow-regmoves -floop-nest-optimize
 KERNEL_MODS        = $(CFLAGS_A15) $(CFLAGS_MODULO)
 
-KBUILD_CFLAGS   := -O3 \
+KBUILD_CFLAGS := -O3 \
 		-Wundef -Wstrict-prototypes -Wno-trigraphs \
 		-fno-strict-aliasing -fno-common \
 		-Werror-implicit-function-declaration \
@@ -404,15 +399,14 @@ KBUILD_CFLAGS   := -O3 \
 		-fno-delete-null-pointer-checks
 		-mtune=cortex-a15 -mfpu=neon-vfpv4 \
 		-ftree-vectorize \
-		-pipe -DNDEBUG -mcpu=cortex-a15 -marm \
+		-mcpu=cortex-a15 \
 		-ftree-vectorize -mvectorize-with-neon-quad \
 		-fgcse-lm -fgcse-sm -fsingle-precision-constant \
 		-fforce-addr -fsched-spec-load \
-		-floop-nest-optimize -fivopts\
-		-fgcse-lm -fgcse-sm -fvariable-expansion-in-unroller \
-		-floop-strip-mine -floop-block -floop-flatten
-KBUILD_AFLAGS_KERNEL :=
-KBUILD_CFLAGS_KERNEL :=
+		-floop-nest-optimize -fivopts
+
+KBUILD_AFLAGS_KERNEL := $(CFLAGS_KERNEL)
+KBUILD_CFLAGS_KERNEL := $(CFLAGS_KERNEL)
 KBUILD_AFLAGS   := -D__ASSEMBLY__
 KBUILD_AFLAGS_MODULE  := -DMODULE
 KBUILD_CFLAGS_MODULE  := -DMODULE
@@ -604,10 +598,7 @@ ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
 KBUILD_CFLAGS	+= -Os $(call cc-disable-warning,maybe-uninitialized,)
 else
 KBUILD_CFLAGS	+= -O3 $(call cc-disable-warning,maybe-uninitialized,) -floop-nest-optimize -floop-strip-mine -floop-block
-ifeq ($(ENABLE_GRAPHITE),true)
-KBUILD_CFLAGS	+= -Ofast -fgraphite -floop-parallelize-all -ftree-loop-linear -floop-interchange -floop-strip-mine -floop-block
-endif
-endif
+endif 
 
 include $(srctree)/arch/$(SRCARCH)/Makefile
 
@@ -624,18 +615,18 @@ endif
 # Use make W=1 to enable this warning (see scripts/Makefile.build)
 KBUILD_CFLAGS += $(call cc-disable-warning, unused-but-set-variable)
 
-#ifdef CONFIG_FRAME_POINTER
-#KBUILD_CFLAGS	+= -fno-omit-frame-pointer -fno-optimize-sibling-calls
-#else
+ifdef CONFIG_FRAME_POINTER
+KBUILD_CFLAGS	+= -fno-omit-frame-pointer -fno-optimize-sibling-calls
+else
 # Some targets (ARM with Thumb2, for example), can't be built with frame
 # pointers.  For those, we don't have FUNCTION_TRACER automatically
 # select FRAME_POINTER.  However, FUNCTION_TRACER adds -pg, and this is
 # incompatible with -fomit-frame-pointer with current GCC, so we don't use
 # -fomit-frame-pointer with FUNCTION_TRACER.
-#ifndef CONFIG_FUNCTION_TRACER
+ifndef CONFIG_FUNCTION_TRACER
 KBUILD_CFLAGS	+= -fomit-frame-pointer
-#endif
-#endif
+endif
+endif
 
 ifdef CONFIG_DEBUG_INFO
 KBUILD_CFLAGS	+= -gdwarf-2
